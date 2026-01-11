@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { dbService } from '../services/dbService';
+import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
 import { User } from '../types';
 
 interface AuthModalProps {
@@ -9,68 +9,206 @@ interface AuthModalProps {
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ onLogin, onClose }) => {
+  const [mode, setMode] = useState<'LOGIN' | 'SIGNUP'>('LOGIN');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    try {
-      const user = await dbService.loginWithGoogle();
-      onLogin(user);
-    } catch (e) {
-      console.error("Login failed", e);
-    } finally {
-      setLoading(false);
+  // Form State
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+
+  // Handle Google Response via window global
+  useEffect(() => {
+    /* Initialize Google Sign-In */
+    const initGoogle = () => {
+        if ((window as any).google) {
+            (window as any).google.accounts.id.initialize({
+                client_id: "YOUR_GOOGLE_CLIENT_ID_HERE", // Replace with real ID or logic to handle simulated
+                callback: handleGoogleResponse
+            });
+            (window as any).google.accounts.id.renderButton(
+                document.getElementById("googleBtn"),
+                { theme: "outline", size: "large", width: "100%" }
+            );
+        }
+    };
+    
+    // Check if script is loaded, if not add it
+    if (!document.getElementById('gsi-script')) {
+        const script = document.createElement('script');
+        script.src = "https://accounts.google.com/gsi/client";
+        script.id = 'gsi-script';
+        script.async = true;
+        script.defer = true;
+        script.onload = initGoogle;
+        document.body.appendChild(script);
+    } else {
+        initGoogle();
     }
+  }, []);
+
+  const handleGoogleResponse = async (response: any) => {
+      setLoading(true);
+      try {
+          const user = await api.loginGoogle(response.credential);
+          onLogin(user);
+      } catch (e) {
+          setError("Google Authentication Failed");
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  // Mock Google Login for development if real client ID isn't set
+  const handleSimulatedGoogle = async () => {
+      // Create a dummy JWT structure to pass validation in dev mode
+      const dummyPayload = {
+          sub: "google_mock_" + Date.now(),
+          email: "mock_google_user@gmail.com",
+          name: "Mock Google User",
+          picture: "https://via.placeholder.com/150"
+      };
+      // Simple base64 encoding to look like a token
+      const dummyToken = btoa(JSON.stringify(dummyPayload)); 
+      
+      setLoading(true);
+      try {
+          const user = await api.loginGoogle(dummyToken);
+          onLogin(user);
+      } catch (e) {
+          setError("Google Auth Failed");
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setError(null);
+      setLoading(true);
+
+      try {
+          let user;
+          if (mode === 'SIGNUP') {
+              user = await api.signupEmail({ email, password, name, phone });
+          } else {
+              user = await api.loginEmail({ email, password });
+          }
+          onLogin(user);
+      } catch (err: any) {
+          setError(err.message || "Authentication failed");
+      } finally {
+          setLoading(false);
+      }
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
         onClick={onClose}
       ></div>
 
-      {/* Modal Content */}
       <div className="relative w-full max-w-md bg-midnight border border-white/10 p-8 shadow-2xl overflow-hidden animate-fade-in-up">
-         {/* Decorative Gradients */}
+         {/* Gradients */}
          <div className="absolute top-0 right-0 w-32 h-32 bg-luxury-gold/10 rounded-full blur-[50px] pointer-events-none"></div>
-         <div className="absolute bottom-0 left-0 w-32 h-32 bg-royal-navy/20 rounded-full blur-[50px] pointer-events-none"></div>
+         <div className="absolute bottom-0 left-0 w-32 h-32 bg-royal-blue-light/20 rounded-full blur-[50px] pointer-events-none"></div>
 
-         <div className="text-center mb-10 relative z-10">
-            <h3 className="text-2xl font-serif italic text-white mb-2">Welcome to MirrorX</h3>
+         <div className="text-center mb-8 relative z-10">
+            <h3 className="text-2xl font-serif italic text-white mb-2">MirrorX Access</h3>
             <p className="text-slate-400 font-rajdhani uppercase tracking-widest text-xs">
-               Sign in to sync your wardrobe
+               {mode === 'LOGIN' ? 'Enter your credentials' : 'Create your digital identity'}
             </p>
          </div>
 
-         <div className="space-y-4 relative z-10">
+         {/* Tabs */}
+         <div className="flex border-b border-white/10 mb-6 relative z-10">
              <button 
-               onClick={handleGoogleLogin}
-               disabled={loading}
-               className="w-full bg-white text-black font-rajdhani font-bold py-4 flex items-center justify-center gap-4 hover:bg-slate-100 transition-colors disabled:opacity-70 disabled:cursor-not-allowed group"
+                onClick={() => setMode('LOGIN')}
+                className={`flex-1 py-3 text-xs uppercase tracking-widest font-bold transition-colors ${mode === 'LOGIN' ? 'text-luxury-gold border-b border-luxury-gold' : 'text-slate-500'}`}
              >
-                {loading ? (
-                    <div className="w-5 h-5 border-2 border-slate-300 border-t-black rounded-full animate-spin"></div>
-                ) : (
-                    <>
-                       {/* Google G Logo SVG */}
-                       <svg className="w-5 h-5" viewBox="0 0 24 24">
-                          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.84z" fill="#FBBC05"/>
-                          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                       </svg>
-                       <span>Continue with Google</span>
-                    </>
-                )}
+                 Sign In
+             </button>
+             <button 
+                onClick={() => setMode('SIGNUP')}
+                className={`flex-1 py-3 text-xs uppercase tracking-widest font-bold transition-colors ${mode === 'SIGNUP' ? 'text-luxury-gold border-b border-luxury-gold' : 'text-slate-500'}`}
+             >
+                 Sign Up
              </button>
          </div>
 
-         <div className="mt-8 text-center">
-             <p className="text-[10px] text-slate-500 font-rajdhani">
-                 By continuing, you agree to MirrorX's <span className="underline hover:text-white cursor-pointer">Terms of Service</span>.
-             </p>
+         <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
+             {mode === 'SIGNUP' && (
+                 <>
+                    <input 
+                        type="text" 
+                        placeholder="Full Name"
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 p-3 text-white text-sm focus:border-luxury-gold focus:outline-none font-rajdhani"
+                        required
+                    />
+                    <input 
+                        type="tel" 
+                        placeholder="Phone Number"
+                        value={phone}
+                        onChange={e => setPhone(e.target.value)}
+                        className="w-full bg-black/50 border border-white/10 p-3 text-white text-sm focus:border-luxury-gold focus:outline-none font-rajdhani"
+                        required
+                    />
+                 </>
+             )}
+             
+             <input 
+                type="email" 
+                placeholder="Email Address"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 p-3 text-white text-sm focus:border-luxury-gold focus:outline-none font-rajdhani"
+                required
+             />
+             
+             <input 
+                type="password" 
+                placeholder="Password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 p-3 text-white text-sm focus:border-luxury-gold focus:outline-none font-rajdhani"
+                required
+             />
+
+             {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+
+             <button 
+                type="submit"
+                disabled={loading}
+                className="w-full btn-primary-gold py-3 text-xs font-bold uppercase tracking-widest disabled:opacity-50"
+             >
+                 {loading ? 'Processing...' : (mode === 'LOGIN' ? 'Enter' : 'Register')}
+             </button>
+         </form>
+
+         <div className="my-6 flex items-center gap-4 relative z-10">
+             <div className="h-[1px] bg-white/10 flex-1"></div>
+             <span className="text-[10px] text-slate-500 uppercase">Or</span>
+             <div className="h-[1px] bg-white/10 flex-1"></div>
+         </div>
+
+         <div className="relative z-10 space-y-3">
+             {/* Real Google Button Container */}
+             <div id="googleBtn"></div>
+             
+             {/* Fallback/Dev Button if API keys missing */}
+             <button 
+                type="button"
+                onClick={handleSimulatedGoogle}
+                className="w-full bg-white text-black py-3 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-200"
+             >
+                 <svg className="w-4 h-4" viewBox="0 0 24 24"><path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"/></svg>
+                 Continue with Google
+             </button>
          </div>
          
          <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-white">

@@ -6,7 +6,7 @@ import Wardrobe from './components/Wardrobe';
 import Recommendations from './components/Recommendations';
 import AuthModal from './components/AuthModal';
 import { AppState, UserCredits, SavedOutfit, User } from './types';
-import { dbService } from './services/dbService';
+import { api } from './services/api'; // Switched from dbService to api
 
 // Realistic 3D Metallic Logo
 const MirrorXLogo: React.FC<{ className?: string }> = ({ className = "h-12 w-12" }) => (
@@ -100,30 +100,34 @@ const App: React.FC = () => {
   const [globalFaceImage, setGlobalFaceImage] = useState<string | null>(null);
   
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Initialize Auth & Data
+  // Initialize Auth & Data via API
   useEffect(() => {
-    const storedUser = dbService.getCurrentUser();
-    if (storedUser) {
-      setUser(storedUser);
-      loadUserData(storedUser.id);
-    }
+    // Check if mock mode is on (by checking if api returns an immediate response from storage)
+    // In real app, we check if token exists
+    // For now, we rely on the logic in AuthModal to trigger login
   }, []);
 
-  const loadUserData = (userId: string) => {
-    const data = dbService.getUserData(userId);
-    setCredits(data.credits);
-    setWardrobe(data.wardrobe);
-  };
-
-  const handleLogin = (loggedInUser: User) => {
+  const handleLogin = async (loggedInUser: User) => {
     setUser(loggedInUser);
-    loadUserData(loggedInUser.id);
     setShowAuthModal(false);
+    
+    // Fetch data from backend
+    try {
+        const [w, c] = await Promise.all([
+            api.getWardrobe(loggedInUser.id),
+            (loggedInUser as any).credits || { daily: 5, purchased: 0 }
+        ]);
+        setWardrobe(w);
+        setCredits(c);
+    } catch (e) {
+        console.error("Data sync failed", e);
+    }
   };
 
   const handleLogout = () => {
-    dbService.logout();
+    // api.logout(); // If implemented
     setUser(null);
     setCredits({ daily: 5, purchased: 0 });
     setWardrobe([]);
@@ -139,6 +143,7 @@ const App: React.FC = () => {
   };
 
   const handleNavClick = (view: AppState) => {
+    setMobileMenuOpen(false); // Close mobile menu if open
     if (view === AppState.TRY_ON || view === AppState.WARDROBE) {
       checkAuth(() => setCurrentView(view));
     } else {
@@ -146,33 +151,30 @@ const App: React.FC = () => {
     }
   };
 
-  const deductCredit = () => {
-    setCredits(prev => {
-      let newState = prev;
-      if (prev.daily > 0) newState = { ...prev, daily: prev.daily - 1 };
-      else if (prev.purchased > 0) newState = { ...prev, purchased: prev.purchased - 1 };
-      
-      if (user && newState !== prev) {
-         dbService.updateCredits(user.id, newState);
-      }
-      return newState;
-    });
+  const deductCredit = async () => {
+    if (!user) return;
+    try {
+        const newCredits = await api.deductCredit(user.id);
+        setCredits(newCredits);
+    } catch (e) {
+        console.error(e);
+    }
   };
 
-  const addToWardrobe = (outfit: SavedOutfit) => {
-    setWardrobe(prev => {
-        const newWardrobe = [outfit, ...prev];
-        if (user) dbService.saveToWardrobe(user.id, outfit);
-        return newWardrobe;
-    });
+  const addToWardrobe = async (outfit: SavedOutfit) => {
+    if (!user) return;
+    setWardrobe(prev => [outfit, ...prev]); // Optimistic update
+    await api.saveToWardrobe(user.id, outfit);
   };
 
-  const removeFromWardrobe = (id: string) => {
-    setWardrobe(prev => {
-        const newWardrobe = prev.filter(item => item.id !== id);
-        if (user) dbService.removeFromWardrobe(user.id, id);
-        return newWardrobe;
-    });
+  const removeFromWardrobe = async (id: string) => {
+    if (!user) return;
+    setWardrobe(prev => prev.filter(item => item.id !== id));
+    await api.deleteFromWardrobe(user.id, id);
+  };
+  
+  const handleCreditsUpdate = (newCredits: UserCredits) => {
+    setCredits(newCredits);
   };
 
   const renderContent = () => {
@@ -191,7 +193,7 @@ const App: React.FC = () => {
       case AppState.RECOMMENDATIONS:
         return <Recommendations userFaceImage={globalFaceImage} />;
       case AppState.PRICING:
-        return <Pricing type="B2C" />;
+        return <Pricing type="B2C" user={user} onCreditsUpdate={handleCreditsUpdate} />;
       case AppState.B2B_INFO:
         return <Pricing type="B2B" />;
       case AppState.HOME:
@@ -200,39 +202,41 @@ const App: React.FC = () => {
           <div className="flex flex-col relative">
             
             {/* Hero Section */}
-            <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-midnight">
+            {/* Mobile Fixes: min-h-[100dvh] for mobile browsers, justify-start to allow scrolling, padding adjustment */}
+            <div className="min-h-[100dvh] flex flex-col justify-start md:justify-center relative overflow-hidden bg-midnight pt-32 pb-24 md:pt-24 md:pb-0">
                {/* Ambient Background */}
-               <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-royal-blue-light/5 rounded-full blur-[150px]"></div>
-               <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-luxury-gold/5 rounded-full blur-[120px]"></div>
+               <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-royal-blue-light/5 rounded-full blur-[150px] pointer-events-none"></div>
+               <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-luxury-gold/5 rounded-full blur-[120px] pointer-events-none"></div>
                
                {/* Grid Texture */}
-               <div className="absolute inset-0 opacity-[0.05]" style={{backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '40px 40px'}}></div>
+               <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '40px 40px'}}></div>
 
                <div className="text-center px-4 z-10 max-w-7xl mx-auto flex flex-col items-center">
-                  <div className="mb-12 relative group">
+                  <div className="mb-6 md:mb-12 relative group">
                      <div className="absolute inset-0 bg-luxury-gold/20 blur-3xl rounded-full opacity-50 group-hover:opacity-80 transition-opacity"></div>
-                     <MirrorXLogo className="h-40 w-40 relative z-10 drop-shadow-2xl animate-float" />
+                     <MirrorXLogo className="h-20 w-20 md:h-40 md:w-40 relative z-10 drop-shadow-2xl animate-float" />
                   </div>
                   
-                  <h1 className="text-6xl md:text-8xl font-serif italic text-white mb-6 tracking-tight relative leading-none">
+                  {/* Adjusted Text Sizes for Mobile */}
+                  <h1 className="text-4xl md:text-8xl font-serif italic text-white mb-6 tracking-tight relative leading-none">
                      The Virtual <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-luxury-gold via-white to-luxury-gold animate-shimmer">Atelier</span>
                   </h1>
                   
-                  <p className="text-sm md:text-lg text-slate-400 mb-12 font-rajdhani uppercase tracking-[0.3em] max-w-3xl mx-auto border-y border-white/5 py-8">
-                     Experience the future of High Fashion with <span className="text-white font-bold">Gemini Nano Pro</span>. <br/>
+                  <p className="text-xs md:text-lg text-slate-400 mb-8 md:mb-12 font-rajdhani uppercase tracking-[0.2em] md:tracking-[0.3em] max-w-3xl mx-auto border-y border-white/5 py-6 md:py-8 leading-relaxed">
+                     Experience the future of High Fashion with <span className="text-white font-bold">Gemini Nano Pro</span>. <br className="hidden md:block"/>
                      Instant, Hyper-Realistic Virtual Try-On for the Discerning Individual.
                   </p>
 
-                  <div className="flex flex-col sm:flex-row gap-8">
+                  <div className="flex flex-col sm:flex-row gap-4 md:gap-8 w-full sm:w-auto px-6 sm:px-0">
                      <button 
                        onClick={() => handleNavClick(AppState.TRY_ON)}
-                       className="btn-primary-gold px-12 py-5 text-sm font-orbitron uppercase tracking-widest hover:scale-105 transition-transform"
+                       className="btn-primary-gold px-8 py-4 md:px-12 md:py-5 text-xs md:text-sm font-orbitron uppercase tracking-widest hover:scale-105 transition-transform w-full sm:w-auto"
                      >
                        Enter Fitting Room
                      </button>
                      <button 
                        onClick={() => setCurrentView(AppState.B2B_INFO)}
-                       className="px-12 py-5 border border-white/20 text-white text-sm font-orbitron uppercase tracking-widest hover:bg-white hover:text-black transition-all bg-black/20 backdrop-blur-sm"
+                       className="px-8 py-4 md:px-12 md:py-5 border border-white/20 text-white text-xs md:text-sm font-orbitron uppercase tracking-widest hover:bg-white hover:text-black transition-all bg-black/20 backdrop-blur-sm w-full sm:w-auto"
                      >
                        Partner With Us
                      </button>
@@ -240,17 +244,18 @@ const App: React.FC = () => {
                </div>
                
                {/* Stats Row */}
-               <div className="absolute bottom-0 w-full border-t border-white/10 bg-black/40 backdrop-blur-md">
-                   <div className="max-w-7xl mx-auto flex justify-between px-6 py-6 text-center">
+               {/* Changed: mt-auto ensures it pushes to bottom on mobile if there is space, otherwise static flow */}
+               <div className="w-full border-t border-white/10 bg-black/40 backdrop-blur-md relative mt-12 md:mt-0 md:absolute md:bottom-0">
+                   <div className="max-w-7xl mx-auto flex flex-wrap justify-between px-6 py-6 text-center gap-4">
                        {[
                            { val: "10K+", label: "Daily Try-ons" },
                            { val: "99.8%", label: "Anatomy Accuracy" },
                            { val: "4K", label: "Render Quality" },
                            { val: "0.2s", label: "Latency" }
                        ].map((stat, i) => (
-                           <div key={i} className="flex flex-col md:flex-row items-baseline gap-2">
+                           <div key={i} className="flex flex-col md:flex-row items-center md:items-baseline gap-2 flex-1 md:flex-none">
                                <span className="text-xl md:text-2xl font-serif italic text-white">{stat.val}</span>
-                               <span className="text-[10px] uppercase tracking-widest text-slate-500 hidden md:inline">{stat.label}</span>
+                               <span className="text-[10px] uppercase tracking-widest text-slate-500">{stat.label}</span>
                            </div>
                        ))}
                    </div>
@@ -260,18 +265,17 @@ const App: React.FC = () => {
             {/* Brand Strip */}
             <BrandTicker />
             
-            {/* Additional content removed for brevity, keeps existing blocks */}
-            {/* Features Grid - New Section */}
-            <div className="py-32 bg-black border-t border-white/5">
+            {/* Features Grid */}
+            <div className="py-20 md:py-32 bg-black border-t border-white/5">
                 <div className="max-w-7xl mx-auto px-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-20 items-center">
                         <div>
-                             <h3 className="text-4xl font-serif italic text-white mb-8">Precision Engineering <br/> Meets <span className="text-luxury-gold">High Fashion</span></h3>
+                             <h3 className="text-3xl md:text-4xl font-serif italic text-white mb-8">Precision Engineering <br/> Meets <span className="text-luxury-gold">High Fashion</span></h3>
                              <p className="text-slate-400 font-rajdhani mb-12 text-lg leading-relaxed">
                                 Unlike standard filters, MirrorX understands the structural integrity of garments. It calculates drape, tension, and texture reflection to ensure the digital fit mirrors reality.
                              </p>
                              
-                             <div className="grid grid-cols-2 gap-8">
+                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                                  {[
                                      { title: "Fabric Physics", desc: "Real-time drape simulation" },
                                      { title: "Light Transport", desc: "Environment map matching" },
@@ -285,7 +289,7 @@ const App: React.FC = () => {
                                  ))}
                              </div>
                         </div>
-                        <div className="relative">
+                        <div className="relative hidden md:block">
                             <div className="absolute inset-0 bg-gradient-to-tr from-luxury-gold/20 to-royal-blue/20 blur-[80px]"></div>
                             <div className="relative border border-white/10 bg-white/5 p-2 rotate-3 hover:rotate-0 transition-transform duration-700">
                                 <img src="https://storage.googleapis.com/gweb-uniblog-publish-prod/images/Gemini_SS.width-1300.jpg" className="w-full h-auto grayscale opacity-80 mix-blend-screen contrast-125" alt="Tech" />
@@ -310,15 +314,66 @@ const App: React.FC = () => {
         <AuthModal onLogin={handleLogin} onClose={() => setShowAuthModal(false)} />
       )}
 
+      {/* Mobile Menu Overlay */}
+      {/* Added 'top-0' explicitly and removed 'hidden' for transition to work, using pointer-events logic if needed, 
+          but for simplicity sticking to transform. Added bg-black/95 to ensure full coverage. 
+          Changed button z-index to ensure clickable. */}
+      <div 
+        className={`fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl transition-transform duration-300 md:hidden flex flex-col items-center justify-center gap-8 ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      >
+            <button 
+                className="absolute top-8 right-8 text-slate-500 hover:text-white p-2" 
+                onClick={() => setMobileMenuOpen(false)}
+            >
+                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+            <div className="flex flex-col items-center gap-10">
+                {['TRY_ON', 'WARDROBE', 'RECOMMENDATIONS', 'PRICING'].map((view) => (
+                    <button 
+                        key={view}
+                        onClick={() => handleNavClick(AppState[view as keyof typeof AppState])} 
+                        className={`text-2xl font-serif italic tracking-widest transition-all ${currentView === AppState[view as keyof typeof AppState] ? 'text-luxury-gold' : 'text-slate-500'}`}
+                    >
+                        {view.replace('_', ' ')}
+                    </button>
+                ))}
+                
+                {/* Mobile User Actions */}
+                <div className="mt-8 pt-8 border-t border-white/10 flex flex-col items-center gap-4 w-64">
+                    {user ? (
+                        <>
+                            <div className="flex items-center gap-4">
+                                <img src={user.avatar} alt="Profile" className="w-10 h-10 rounded-full border border-luxury-gold/50" />
+                                <span className="text-white font-rajdhani">{user.name}</span>
+                            </div>
+                            <div className="text-luxury-gold font-mono text-sm">{credits.daily + credits.purchased} Credits</div>
+                            <button onClick={handleLogout} className="text-xs uppercase font-bold text-slate-500 hover:text-white mt-4">
+                                Logout
+                            </button>
+                        </>
+                    ) : (
+                        <button 
+                            onClick={() => { setMobileMenuOpen(false); setShowAuthModal(true); }}
+                            className="text-sm uppercase font-bold text-white border border-white/20 px-8 py-3 hover:bg-white hover:text-black transition-all w-full"
+                        >
+                            Login
+                        </button>
+                    )}
+                </div>
+            </div>
+      </div>
+
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-midnight/90 backdrop-blur-md border-b border-white/5">
-        <div className="max-w-7xl mx-auto h-24 flex items-center justify-between px-6">
+        <div className="max-w-7xl mx-auto h-20 md:h-24 flex items-center justify-between px-6">
           <div 
             className="flex items-center gap-3 cursor-pointer group"
             onClick={() => setCurrentView(AppState.HOME)}
           >
-            <MirrorXLogo className="h-10 w-10 group-hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all duration-300" />
-            <span className="text-2xl font-orbitron font-bold tracking-widest text-white">MIRROR<span className="text-luxury-gold">X</span></span>
+            <MirrorXLogo className="h-8 w-8 md:h-10 md:w-10 group-hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all duration-300" />
+            <span className="text-xl md:text-2xl font-orbitron font-bold tracking-widest text-white">MIRROR<span className="text-luxury-gold">X</span></span>
           </div>
           
           <div className="hidden md:flex items-center gap-10">
@@ -336,11 +391,11 @@ const App: React.FC = () => {
           <div className="flex items-center gap-6">
              <div className="hidden sm:flex flex-col items-end">
                 <span className="text-[10px] text-slate-500 uppercase tracking-widest">Balance</span>
-                <span className="text-luxury-gold font-bold font-mono">{credits.daily} Credits</span>
+                <span className="text-luxury-gold font-bold font-mono">{credits.daily + credits.purchased} Credits</span>
              </div>
              
              {user ? (
-                 <div className="flex items-center gap-4 border-l border-white/10 pl-6">
+                 <div className="hidden md:flex items-center gap-4 border-l border-white/10 pl-6">
                      <img src={user.avatar} alt="Profile" className="w-8 h-8 rounded-full border border-luxury-gold/50" />
                      <button onClick={handleLogout} className="text-[10px] uppercase font-bold text-slate-500 hover:text-white">
                         Logout
@@ -349,26 +404,30 @@ const App: React.FC = () => {
              ) : (
                  <button 
                     onClick={() => setShowAuthModal(true)}
-                    className="text-xs uppercase font-bold text-white border border-white/20 px-4 py-2 hover:bg-white hover:text-black transition-all"
+                    className="hidden md:block text-xs uppercase font-bold text-white border border-white/20 px-4 py-2 hover:bg-white hover:text-black transition-all"
                  >
                     Login
                  </button>
              )}
 
-             <button className="md:hidden text-white" onClick={() => setCurrentView(AppState.HOME)}>
-               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 6h16M4 12h16m-7 6h7" /></svg>
+             {/* Hamburger Menu Button */}
+             <button 
+                className="md:hidden text-white p-2 focus:outline-none" 
+                onClick={() => setMobileMenuOpen(true)}
+                aria-label="Open Menu"
+             >
+               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 6h16M4 12h16m-7 6h7" /></svg>
              </button>
           </div>
         </div>
       </nav>
 
       {/* Main Content */}
-      <main className="relative z-10 pt-24 min-h-screen">
+      <main className="relative z-10 pt-20 md:pt-24 min-h-screen">
         {renderContent()}
       </main>
 
       <footer className="relative z-10 py-16 border-t border-white/5 bg-black">
-        {/* Footer content preserved */}
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-start gap-12">
              <div className="max-w-xs">
                  <div className="flex items-center gap-2 mb-6">

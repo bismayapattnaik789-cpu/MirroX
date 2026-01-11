@@ -1,13 +1,76 @@
+
 import React from 'react';
-import { PricingTier } from '../types';
+import { PricingTier, User } from '../types';
 import { B2C_PRICING, B2B_PRICING } from '../constants';
+import { api } from '../services/api';
 
 interface PricingProps {
   type: 'B2C' | 'B2B';
+  user?: User | null;
+  onCreditsUpdate?: (credits: any) => void;
 }
 
-const PricingCard: React.FC<{ tier: PricingTier; index: number }> = ({ tier, index }) => {
+// Helper to parse price string to number
+const parsePrice = (priceStr: string) => {
+  if (priceStr === 'Free') return 0;
+  return parseInt(priceStr.replace(/[^\d]/g, ''));
+};
+
+const PricingCard: React.FC<{ tier: PricingTier; index: number; user?: User | null; onCreditsUpdate?: (c:any)=>void }> = ({ tier, index, user, onCreditsUpdate }) => {
     const isGold = tier.isPopular;
+    const priceAmount = parsePrice(tier.price);
+
+    const handlePurchase = async () => {
+      if (tier.price === 'Free') return; // Handle Free logic
+      if (!user) {
+        alert("Please login to purchase credits.");
+        return;
+      }
+
+      try {
+        // 1. Create Order
+        // Assuming Power Pack = 20 credits, others = 0 or custom logic
+        const creditsToAdd = tier.id === 'b2c-credits' ? 20 : 0; 
+        
+        const order = await api.createOrder(priceAmount, creditsToAdd);
+
+        // 2. Open Razorpay
+        const options = {
+          key: "rzp_test_1234567890", // Public Key (In real app, move to env)
+          amount: order.amount,
+          currency: "INR",
+          name: "MirrorX Atelier",
+          description: `Purchase: ${tier.name}`,
+          order_id: order.id,
+          handler: async function (response: any) {
+             // 3. Verify Payment
+             const verifyRes = await api.verifyPayment({
+               razorpay_order_id: response.razorpay_order_id,
+               razorpay_payment_id: response.razorpay_payment_id,
+               razorpay_signature: response.razorpay_signature || "mock_sig", // Mock backend ignores signature if needed
+               userId: user.id,
+               creditsToAdd: creditsToAdd,
+               amount: priceAmount
+             });
+
+             if (verifyRes.success) {
+               alert("Payment Successful! Credits added.");
+               if (onCreditsUpdate) onCreditsUpdate(verifyRes.credits);
+             } else {
+               alert("Payment verification failed.");
+             }
+          },
+          theme: { color: "#D4AF37" }
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
+
+      } catch (e) {
+        console.error("Payment Error", e);
+        alert("Payment initialization failed. Ensure backend is running.");
+      }
+    };
     
     return (
       <div className={`relative flex flex-col p-8 md:p-10 border transition-all duration-500 group 
@@ -37,16 +100,18 @@ const PricingCard: React.FC<{ tier: PricingTier; index: number }> = ({ tier, ind
           ))}
         </ul>
         
-        <button className={`w-full py-4 uppercase tracking-[0.2em] text-xs font-bold transition-all
+        <button 
+          onClick={handlePurchase}
+          className={`w-full py-4 uppercase tracking-[0.2em] text-xs font-bold transition-all
             ${isGold ? 'bg-luxury-gold text-black hover:bg-white' : 'border border-white/20 text-white hover:bg-white hover:text-black'}`}
         >
-          Select Access
+          {tier.price === 'Free' ? 'Current Plan' : 'Purchase'}
         </button>
       </div>
     );
 };
 
-const Pricing: React.FC<PricingProps> = ({ type }) => {
+const Pricing: React.FC<PricingProps> = ({ type, user, onCreditsUpdate }) => {
   const tiers = type === 'B2C' ? B2C_PRICING : B2B_PRICING;
 
   return (
@@ -65,7 +130,7 @@ const Pricing: React.FC<PricingProps> = ({ type }) => {
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {tiers.map((tier, idx) => (
-          <PricingCard key={tier.id} tier={tier} index={idx} />
+          <PricingCard key={tier.id} tier={tier} index={idx} user={user} onCreditsUpdate={onCreditsUpdate} />
         ))}
       </div>
     </div>

@@ -1,3 +1,4 @@
+
 import { PricingTier } from './types';
 
 export const APP_NAME = 'MirrorX';

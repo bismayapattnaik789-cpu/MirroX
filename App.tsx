@@ -6,9 +6,9 @@ import Wardrobe from './components/Wardrobe';
 import Recommendations from './components/Recommendations';
 import AuthModal from './components/AuthModal';
 import { AppState, UserCredits, SavedOutfit, User } from './types';
-import { api } from './services/api'; // Switched from dbService to api
+import { api } from './services/api'; 
 
-// Realistic 3D Metallic Logo
+// Realistic 3D Metallic Logo for MirrorX
 const MirrorXLogo: React.FC<{ className?: string }> = ({ className = "h-12 w-12" }) => (
   <svg className={className} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
     <defs>
@@ -105,8 +105,6 @@ const App: React.FC = () => {
   // Initialize Auth & Data via API
   useEffect(() => {
     // Check if mock mode is on (by checking if api returns an immediate response from storage)
-    // In real app, we check if token exists
-    // For now, we rely on the logic in AuthModal to trigger login
   }, []);
 
   const handleLogin = async (loggedInUser: User) => {
@@ -127,7 +125,6 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // api.logout(); // If implemented
     setUser(null);
     setCredits({ daily: 5, purchased: 0 });
     setWardrobe([]);
@@ -202,7 +199,6 @@ const App: React.FC = () => {
           <div className="flex flex-col relative">
             
             {/* Hero Section */}
-            {/* Mobile Fixes: min-h-[100dvh] for mobile browsers, justify-start to allow scrolling, padding adjustment */}
             <div className="min-h-[100dvh] flex flex-col justify-start md:justify-center relative overflow-hidden bg-midnight pt-32 pb-24 md:pt-24 md:pb-0">
                {/* Ambient Background */}
                <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-royal-blue-light/5 rounded-full blur-[150px] pointer-events-none"></div>
@@ -217,7 +213,6 @@ const App: React.FC = () => {
                      <MirrorXLogo className="h-20 w-20 md:h-40 md:w-40 relative z-10 drop-shadow-2xl animate-float" />
                   </div>
                   
-                  {/* Adjusted Text Sizes for Mobile */}
                   <h1 className="text-4xl md:text-8xl font-serif italic text-white mb-6 tracking-tight relative leading-none">
                      The Virtual <br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-luxury-gold via-white to-luxury-gold animate-shimmer">Atelier</span>
                   </h1>
@@ -244,7 +239,6 @@ const App: React.FC = () => {
                </div>
                
                {/* Stats Row */}
-               {/* Changed: mt-auto ensures it pushes to bottom on mobile if there is space, otherwise static flow */}
                <div className="w-full border-t border-white/10 bg-black/40 backdrop-blur-md relative mt-12 md:mt-0 md:absolute md:bottom-0">
                    <div className="max-w-7xl mx-auto flex flex-wrap justify-between px-6 py-6 text-center gap-4">
                        {[
@@ -315,9 +309,6 @@ const App: React.FC = () => {
       )}
 
       {/* Mobile Menu Overlay */}
-      {/* Added 'top-0' explicitly and removed 'hidden' for transition to work, using pointer-events logic if needed, 
-          but for simplicity sticking to transform. Added bg-black/95 to ensure full coverage. 
-          Changed button z-index to ensure clickable. */}
       <div 
         className={`fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl transition-transform duration-300 md:hidden flex flex-col items-center justify-center gap-8 ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >

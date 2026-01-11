@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 const Loader: React.FC = () => {
@@ -20,7 +21,7 @@ const Loader: React.FC = () => {
             Stitching Reality
          </p>
          <p className="text-slate-500 font-rajdhani text-xs uppercase tracking-widest">
-            Gemini Nano Pro Processing...
+            MirrorX Engine Processing...
          </p>
       </div>
     </div>

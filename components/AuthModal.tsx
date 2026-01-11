@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
 import { User } from '../types';
 
@@ -8,81 +8,91 @@ interface AuthModalProps {
   onClose: () => void;
 }
 
+const GOOGLE_CLIENT_ID = "1006878217030-lr0053lovhenvbj7l2g5u4jftm4gt0d2.apps.googleusercontent.com";
+
 const AuthModal: React.FC<AuthModalProps> = ({ onLogin, onClose }) => {
   const [mode, setMode] = useState<'LOGIN' | 'SIGNUP'>('LOGIN');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
+  const [currentOrigin, setCurrentOrigin] = useState<string>('');
+  
   // Form State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  
+  const googleBtnRef = useRef<HTMLDivElement>(null);
 
-  // Handle Google Response via window global
   useEffect(() => {
-    /* Initialize Google Sign-In */
-    const initGoogle = () => {
-        if ((window as any).google) {
-            (window as any).google.accounts.id.initialize({
-                client_id: "YOUR_GOOGLE_CLIENT_ID_HERE", // Replace with real ID or logic to handle simulated
-                callback: handleGoogleResponse
-            });
-            (window as any).google.accounts.id.renderButton(
-                document.getElementById("googleBtn"),
-                { theme: "outline", size: "large", width: "100%" }
-            );
-        }
-    };
-    
-    // Check if script is loaded, if not add it
-    if (!document.getElementById('gsi-script')) {
-        const script = document.createElement('script');
-        script.src = "https://accounts.google.com/gsi/client";
-        script.id = 'gsi-script';
-        script.async = true;
-        script.defer = true;
-        script.onload = initGoogle;
-        document.body.appendChild(script);
-    } else {
-        initGoogle();
-    }
-  }, []);
+    // Capture current origin for debugging
+    setCurrentOrigin(window.location.origin);
 
-  const handleGoogleResponse = async (response: any) => {
+    const handleGoogleResponse = async (response: any) => {
+      console.log("Google Response:", response);
       setLoading(true);
       try {
           const user = await api.loginGoogle(response.credential);
           onLogin(user);
-      } catch (e) {
-          setError("Google Authentication Failed");
+      } catch (e: any) {
+          console.error("Google Login Error", e);
+          setError("Authentication failed. Please check console.");
       } finally {
           setLoading(false);
       }
-  };
+    };
 
-  // Mock Google Login for development if real client ID isn't set
-  const handleSimulatedGoogle = async () => {
-      // Create a dummy JWT structure to pass validation in dev mode
-      const dummyPayload = {
-          sub: "google_mock_" + Date.now(),
-          email: "mock_google_user@gmail.com",
-          name: "Mock Google User",
-          picture: "https://via.placeholder.com/150"
-      };
-      // Simple base64 encoding to look like a token
-      const dummyToken = btoa(JSON.stringify(dummyPayload)); 
-      
-      setLoading(true);
-      try {
-          const user = await api.loginGoogle(dummyToken);
-          onLogin(user);
-      } catch (e) {
-          setError("Google Auth Failed");
-      } finally {
-          setLoading(false);
-      }
-  };
+    const initializeGSI = () => {
+        if (!(window as any).google) return;
+        
+        try {
+            // Initialize with minimal config to avoid conflict
+            (window as any).google.accounts.id.initialize({
+                client_id: GOOGLE_CLIENT_ID,
+                callback: handleGoogleResponse,
+                auto_select: false,
+                cancel_on_tap_outside: true
+            });
+
+            if (googleBtnRef.current) {
+                (window as any).google.accounts.id.renderButton(
+                    googleBtnRef.current,
+                    { 
+                        theme: "outline", 
+                        size: "large", 
+                        width: "100%",
+                        text: "continue_with",
+                        logo_alignment: "center"
+                    }
+                );
+            }
+        } catch (err) {
+            console.error("GSI Init Error:", err);
+        }
+    };
+
+    // Script Loading Logic
+    const scriptId = 'gsi-script';
+    let script = document.getElementById(scriptId) as HTMLScriptElement;
+
+    if (!script) {
+        script = document.createElement('script');
+        script.src = "https://accounts.google.com/gsi/client";
+        script.id = scriptId;
+        script.async = true;
+        script.defer = true;
+        script.onload = initializeGSI;
+        document.body.appendChild(script);
+    } else if ((window as any).google) {
+        initializeGSI();
+    } else {
+        script.addEventListener('load', initializeGSI);
+    }
+
+    return () => {
+        if(script) script.removeEventListener('load', initializeGSI);
+    };
+  }, [onLogin]);
 
   const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -102,6 +112,22 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, onClose }) => {
       } finally {
           setLoading(false);
       }
+  };
+
+  const handleGuestLogin = () => {
+    setLoading(true);
+    setTimeout(() => {
+        const guestUser: User = {
+            id: 'guest_' + Date.now(),
+            name: 'Guest User',
+            email: 'guest@mirrorx.com',
+            avatar: `https://ui-avatars.com/api/?name=Guest+User&background=D4AF37&color=000`
+        };
+        // Mock credits for guest
+        (guestUser as any).credits = { daily: 5, purchased: 0 };
+        onLogin(guestUser);
+        setLoading(false);
+    }, 800);
   };
 
   return (
@@ -180,11 +206,32 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, onClose }) => {
              />
 
              {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+             
+             {/* Origin Debug Info - Helpful for fixing mismatch errors */}
+             <div className="bg-white/5 border border-white/10 p-3 rounded mt-4">
+                 <p className="text-[10px] text-slate-400 uppercase tracking-widest mb-1">
+                     <span className="text-red-400 font-bold">Having Google Login Issues?</span>
+                 </p>
+                 <p className="text-[10px] text-slate-500 mb-2">
+                     If you see "origin_mismatch", add this URL to <strong>Authorized JavaScript origins</strong> in Google Cloud Console:
+                 </p>
+                 <code className="block bg-black p-2 text-luxury-gold text-xs font-mono break-all border border-luxury-gold/30 mb-3 select-all">
+                     {currentOrigin}
+                 </code>
+                 
+                 <button 
+                    type="button" 
+                    onClick={handleGuestLogin}
+                    className="w-full bg-white/10 hover:bg-white/20 text-white py-2 text-xs uppercase tracking-widest font-bold border border-white/20"
+                 >
+                    Skip & Continue as Guest
+                 </button>
+             </div>
 
              <button 
                 type="submit"
                 disabled={loading}
-                className="w-full btn-primary-gold py-3 text-xs font-bold uppercase tracking-widest disabled:opacity-50"
+                className="w-full btn-primary-gold py-3 text-xs font-bold uppercase tracking-widest disabled:opacity-50 mt-4"
              >
                  {loading ? 'Processing...' : (mode === 'LOGIN' ? 'Enter' : 'Register')}
              </button>
@@ -197,18 +244,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onLogin, onClose }) => {
          </div>
 
          <div className="relative z-10 space-y-3">
-             {/* Real Google Button Container */}
-             <div id="googleBtn"></div>
-             
-             {/* Fallback/Dev Button if API keys missing */}
-             <button 
-                type="button"
-                onClick={handleSimulatedGoogle}
-                className="w-full bg-white text-black py-3 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-200"
-             >
-                 <svg className="w-4 h-4" viewBox="0 0 24 24"><path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"/></svg>
-                 Continue with Google
-             </button>
+             <div ref={googleBtnRef} className="w-full flex justify-center h-[40px]"></div>
          </div>
          
          <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-white">

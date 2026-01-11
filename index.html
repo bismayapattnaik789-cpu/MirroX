@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MirrorX | Virtual Atelier</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              'orbitron': ['Orbitron', 'sans-serif'],
+              'rajdhani': ['Rajdhani', 'sans-serif'],
+              'serif': ['Playfair Display', 'serif'],
+            },
+            colors: {
+              'luxury-gold': '#D4AF37',
+              'luxury-gold-dim': '#AA8C2C',
+              'luxury-gold-light': '#F8E79B',
+              'royal-blue': '#0f172a', /* Dark Slate/Royal blend */
+              'royal-blue-light': '#1E3A8A',
+              'midnight': '#02040a',
+              'platinum': '#E2E8F0',
+            },
+            backgroundImage: {
+              'gold-gradient': 'linear-gradient(135deg, #D4AF37 0%, #F8E79B 50%, #AA8C2C 100%)',
+              'royal-gradient': 'linear-gradient(to right, #0f172a, #1E3A8A)',
+            },
+            animation: {
+              'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'shimmer': 'shimmer 2.5s infinite',
+            },
+            keyframes: {
+              shimmer: {
+                '0%': { backgroundPosition: '-1000px 0' },
+                '100%': { backgroundPosition: '1000px 0' }
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        font-family: 'Rajdhani', sans-serif;
+        background-color: #02040a;
+        color: #E2E8F0;
+        overflow-x: hidden;
+      }
+      
+      h1, h2, h3, .brand-font {
+        font-family: 'Orbitron', sans-serif;
+      }
+
+      /* Luxury Utilities */
+      .text-gold-gradient {
+        background: linear-gradient(to right, #D4AF37, #F8E79B, #D4AF37);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-size: 200% auto;
+        animation: shine 5s linear infinite;
+      }
+      
+      @keyframes shine {
+        to {
+          background-position: 200% center;
+        }
+      }
+
+      .border-gold {
+        border-color: rgba(212, 175, 55, 0.3);
+      }
+
+      .glass-panel {
+        background: rgba(10, 15, 30, 0.7);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(212, 175, 55, 0.15);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+      }
+      
+      .btn-luxury {
+        background: linear-gradient(180deg, rgba(20,20,20,1) 0%, rgba(5,5,5,1) 100%);
+        border: 1px solid #D4AF37;
+        color: #D4AF37;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+      }
+      
+      .btn-luxury:hover {
+        background: #D4AF37;
+        color: #000;
+        box-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
+      }
+      
+      .btn-primary-gold {
+        background: linear-gradient(135deg, #D4AF37 0%, #AA8C2C 100%);
+        color: #000;
+        font-weight: 700;
+        border: none;
+      }
+      
+      .btn-primary-gold:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(212, 175, 55, 0.5);
+      }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #02040a;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #334155;
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #D4AF37;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "@google/genai": "https://esm.sh/@google/genai@^1.35.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

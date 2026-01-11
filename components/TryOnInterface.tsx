@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { generateTryOnImage, suggestMatchingItems, extractProductImageFromUrl } from '../services/geminiService';
 import Loader from './Loader';
@@ -154,7 +153,8 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
         onSaveToWardrobe({
             id: Date.now().toString(),
             image: generatedImage,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            productUrl: productUrl || selectedProduct?.url
         });
         setIsSaved(true);
     }

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { SavedOutfit } from '../types';
 
@@ -43,7 +42,11 @@ const Wardrobe: React.FC<WardrobeProps> = ({ items, onDeleteItem }) => {
             </div>
             
             <div className="flex border-t border-white/10">
-                 <button className="flex-1 py-4 text-xs font-bold uppercase tracking-widest text-white hover:text-black hover:bg-luxury-gold transition-colors">
+                 <button 
+                   onClick={() => item.productUrl && window.open(item.productUrl, '_blank')}
+                   disabled={!item.productUrl}
+                   className={`flex-1 py-4 text-xs font-bold uppercase tracking-widest text-white transition-colors ${item.productUrl ? 'hover:text-black hover:bg-luxury-gold cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                 >
                     Acquire
                  </button>
                  <button 

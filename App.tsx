@@ -7,8 +7,6 @@ import Recommendations from './components/Recommendations';
 import AuthModal from './components/AuthModal';
 import { AppState, UserCredits, SavedOutfit, User } from './types';
 import { api } from './services/api'; 
-// Initialize Firebase & Messaging
-import { messaging, getToken, onMessage } from './services/firebase';
 
 // Realistic 3D Metallic Logo for MirrorX
 const MirrorXLogo: React.FC<{ className?: string }> = ({ className = "h-12 w-12" }) => (
@@ -107,36 +105,6 @@ const App: React.FC = () => {
   // Initialize Auth & Data via API
   useEffect(() => {
     // Check if mock mode is on (by checking if api returns an immediate response from storage)
-
-    // FCM Notification Setup
-    if (messaging) {
-      // 1. Request Permission
-      Notification.requestPermission().then(permission => {
-        if (permission === 'granted') {
-          console.log('Notification permission granted.');
-          // 2. Get Token
-          getToken(messaging, { 
-             vapidKey: "BM2S-EXAMPLE_VAPID_KEY_REPLACE_THIS_WITH_REAL_KEY" // Optional: Use VAPID key from Firebase Console -> Cloud Messaging -> Web Config
-          }).then((currentToken) => {
-            if (currentToken) {
-              console.log('FCM Token:', currentToken);
-              // TODO: Send this token to backend to update user profile
-            } else {
-              console.log('No registration token available. Request permission to generate one.');
-            }
-          }).catch((err) => {
-            console.log('An error occurred while retrieving token. ', err);
-          });
-        }
-      });
-
-      // 3. Handle Foreground Messages
-      onMessage(messaging, (payload) => {
-        console.log('Message received. ', payload);
-        // Simple foreground alert for demo
-        alert(`New Notification: ${payload.notification?.title}\n${payload.notification?.body}`);
-      });
-    }
   }, []);
 
   const handleLogin = async (loggedInUser: User) => {

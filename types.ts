@@ -1,4 +1,3 @@
-
 export interface PricingTier {
   id: string;
   name: string;
@@ -33,6 +32,7 @@ export interface SavedOutfit {
   id: string;
   image: string; // Base64
   timestamp: number;
+  productUrl?: string;
 }
 
 export interface Recommendation {

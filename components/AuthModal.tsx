@@ -8,7 +8,7 @@ interface AuthModalProps {
   onClose: () => void;
 }
 
-const GOOGLE_CLIENT_ID = "1006878217030-lr0053lovhenvbj7l2g5u4jftm4gt0d2.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "1006878217030-lr0053lovhenvbj7l2g5u4jftm4gt0d2.apps.googleusercontent.com";
 
 const AuthModal: React.FC<AuthModalProps> = ({ onLogin, onClose }) => {
   const [mode, setMode] = useState<'LOGIN' | 'SIGNUP'>('LOGIN');

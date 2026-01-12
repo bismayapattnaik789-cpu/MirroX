@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Recommendation, ProductLink } from "../types";
 
@@ -17,16 +18,34 @@ export const generateTryOnImage = async (
   
   const aistudio = (window as any).aistudio;
   
-  // Key check logic
+  // Debug Log to check if Key exists (Masked)
+  const envKey = process.env.API_KEY;
+  console.log("[GeminiService] Checking API Key configuration...");
+  if (envKey) {
+      console.log("[GeminiService] process.env.API_KEY is detected (Length: " + envKey.length + ")");
+  } else {
+      console.warn("[GeminiService] process.env.API_KEY is MISSING or UNDEFINED.");
+  }
+
+  // Key check logic for Google AI Studio embedded environment
   if (aistudio && aistudio.hasSelectedApiKey) {
     const hasKey = await aistudio.hasSelectedApiKey();
     if (!hasKey) {
         onKeyError();
-        throw new Error("API Key not selected");
+        throw new Error("API Key not selected in AI Studio toolbar.");
     }
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Check if API Key exists in environment variables (Critical for Hosting)
+  const apiKey = process.env.API_KEY;
+  if (!apiKey && (!aistudio || !aistudio.hasSelectedApiKey)) {
+     // If we are not in AI Studio and no env key is set
+     throw new Error("MISSING API KEY: Please add 'API_KEY' to your hosting environment variables.");
+  }
+
+  // Initialize with the detected key
+  const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy_key_for_studio_override' });
+  
   const cleanFace = faceBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
   const cleanClothing = clothingBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
 
@@ -45,14 +64,22 @@ export const generateTryOnImage = async (
         ${isFullOutfit 
           ? 'Recreate the **COMPLETE OUTFIT** (Top and Bottom) from the Reference Clothing image exactly as shown. Do not substitute pants/skirts if they are visible in the reference. If the reference is a full-body shot, transfer the entire look.' 
           : 'Use the clothing item from the Reference. If only a single piece (e.g., shirt) is provided, generate realistic matching complementary items (e.g., pants, skirt) that suit the style naturally.'}
-      - **BODY**: Generate a realistic body that fits the clothing naturally.
+      - **BODY**: Generate a realistic body that fits the clothing naturally. Ensure the model is fully clothed and the pose is elegant and professional.
       - **REALISM**: Render with physically accurate fabric textures (folds, shadows, weight). Skin texture must look human, not plastic.
       - **LIGHTING**: Use cinematic, soft studio lighting. 
       - **BACKGROUND**: Blurred luxury boutique or neutral textured wall.
       
       NEGATIVE PROMPT (Avoid these):
-      - Cartoon, illustration, 3d render, painting, drawing, distorted face, floating clothes, mannequin, blurry, low resolution, bad anatomy, mismatched skin tone.
+      - Cartoon, illustration, 3d render, painting, drawing, distorted face, floating clothes, mannequin, blurry, low resolution, bad anatomy, mismatched skin tone, nudity, exposure.
   `;
+
+  // Safety Settings to prevent false positives on fashion/body images
+  const safetySettings = [
+    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' }
+  ];
 
   // 2. Try Primary Model (Gemini 3 Pro)
   try {
@@ -69,7 +96,8 @@ export const generateTryOnImage = async (
         ],
       },
       config: {
-        imageConfig: { aspectRatio: "3:4", imageSize: "1K" }
+        imageConfig: { aspectRatio: "3:4", imageSize: "1K" },
+        safetySettings: safetySettings as any,
       },
     });
 
@@ -80,7 +108,7 @@ export const generateTryOnImage = async (
 
     // 3. Fallback to Secondary Model (Gemini 2.5 Flash)
     // Only if the error is NOT about the API key (which would fail everywhere)
-    if (primaryError.message?.includes("API key") || primaryError.message?.includes("billing")) {
+    if (primaryError.message?.includes("API key") || primaryError.message?.includes("billing") || primaryError.message?.includes("403")) {
         throw primaryError;
     }
 
@@ -95,15 +123,17 @@ export const generateTryOnImage = async (
                     { inlineData: { data: cleanClothing, mimeType: 'image/jpeg' } }
                 ]
             },
-            // Note: 2.5 Flash Image config is different, generally doesn't take imageSize/aspectRatio in same config object structure in some versions, 
-            // but the SDK handles standard generateContent.
+            config: {
+                safetySettings: safetySettings as any,
+            }
         });
         
         return extractImageFromResponse(fallbackResponse);
 
-    } catch (fallbackError) {
+    } catch (fallbackError: any) {
         console.error("Fallback model failed:", fallbackError);
-        throw new Error("Generation failed on all models. Please try a different image.");
+        // Propagate the specific error message if available
+        throw new Error(fallbackError.message || "Generation failed on all models. Please try a different image.");
     }
   }
 };
@@ -116,6 +146,10 @@ function extractImageFromResponse(response: any): string {
           return `data:image/png;base64,${part.inlineData.data}`;
         }
       }
+    }
+    // Check for finishReason to give better errors
+    if (response.candidates?.[0]?.finishReason) {
+        throw new Error(`Generation stopped: ${response.candidates[0].finishReason}`);
     }
     throw new Error("Model returned no image data.");
 }
@@ -146,7 +180,7 @@ async function fetchImageWithCorsFallback(url: string): Promise<Blob> {
 }
 
 export const extractProductImageFromUrl = async (productUrl: string): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
     
     try {
         // Use a lightweight model to find the image URL using Grounding
@@ -211,7 +245,7 @@ export const extractProductImageFromUrl = async (productUrl: string): Promise<st
 }
 
 export const suggestMatchingItems = async (clothingBase64: string): Promise<ProductLink[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   const cleanClothing = clothingBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
 
   try {
@@ -264,7 +298,7 @@ export const suggestMatchingItems = async (clothingBase64: string): Promise<Prod
 };
 
 export const analyzeStyleAndRecommend = async (faceBase64: string): Promise<Recommendation[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   const cleanFace = faceBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
 
   try {

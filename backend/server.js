@@ -212,11 +212,9 @@ app.post('/api/auth/google', async (req, res) => {
   }
 });
 
-// Other routes remain similar, but using safeQuery...
-// Keeping the rest simple for brevity as the Auth fix is primary.
-
 // --- SERVER LISTEN ---
-const PORT = parseInt(process.env.PORT) || 8080;
+// Cloud Run requires the app to listen on process.env.PORT
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`MirrorX Backend listening on port ${PORT}`);
 });

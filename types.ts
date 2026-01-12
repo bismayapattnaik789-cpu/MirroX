@@ -14,6 +14,7 @@ export enum AppState {
   RECOMMENDATIONS = 'RECOMMENDATIONS',
   PRICING = 'PRICING',
   B2B_INFO = 'B2B_INFO',
+  LEGAL = 'LEGAL',
 }
 
 export interface User {

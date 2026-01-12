@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { generateTryOnImage, suggestMatchingItems, extractProductImageFromUrl } from '../services/geminiService';
 import Loader from './Loader';
@@ -140,7 +141,21 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
     } catch (err: any) {
       console.error(err);
       if(!showKeyBtn) {
-          setError("The Neural Engine encountered resistance. Try a clearer image.");
+          const msg = err.message || JSON.stringify(err);
+          let errorMessage = msg;
+
+          // Categorize known errors for better UX
+          if (msg.toLowerCase().includes("safety") || msg.toLowerCase().includes("blocked")) {
+              errorMessage = "Safety Filter Triggered: Please ensure images are appropriate and do not contain nudity.";
+          } else if (msg.includes("429")) {
+              errorMessage = "High Traffic: The model is currently busy. Please try again in 1 minute.";
+          } else if (msg.includes("API key") || msg.includes("403") || msg.includes("400")) {
+              errorMessage = "API Configuration Error: Check your Hosting Environment Variables. The API Key is likely missing or invalid.";
+          } else if (msg.toLowerCase().includes("failed to fetch")) {
+              errorMessage = "Network Error: Could not connect to Gemini API. Check your internet or API Key restrictions.";
+          }
+          
+          setError(errorMessage);
       }
       setLinksLoading(false);
     } finally {
@@ -186,7 +201,7 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-4 md:p-8">
+    <div className="w-full max-w-7xl mx-auto p-4 md:p-8 animate-reveal-up">
       
       {/* Product Modal Overlay */}
       <ProductModal 
@@ -195,7 +210,7 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
       />
 
       {showKeyBtn && (
-          <div className="mb-10 p-6 border border-luxury-gold bg-luxury-gold/5 backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="mb-10 p-6 border border-luxury-gold bg-luxury-gold/5 backdrop-blur-md flex flex-col md:flex-row items-center justify-between gap-4 animate-reveal-up">
               <div className="text-luxury-gold">
                   <p className="font-bold font-serif tracking-wide text-xl">Access Required</p>
                   <p className="text-sm opacity-80 font-rajdhani">Billing enablement required for Pro Neural Engine usage.</p>
@@ -211,7 +226,7 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
         
         {/* Frame 1: Identity */}
         <div 
-            className="group relative h-[550px] cursor-pointer transition-all duration-700"
+            className="group relative h-[550px] cursor-pointer transition-all duration-700 hover:scale-[1.01]"
             onClick={() => faceInputRef.current?.click()}
         >
            {/* Elegant Frame Border */}
@@ -219,24 +234,28 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-luxury-gold to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
            <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-luxury-gold to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
            
+           {/* Scanline Effect */}
+           <div className="scanline group-hover:opacity-100 opacity-0 transition-opacity"></div>
+           
            <div className="absolute inset-2 bg-midnight/50 backdrop-blur-sm flex flex-col items-center justify-center z-10 overflow-hidden">
                
                <div className="absolute top-6 left-6 z-20">
-                   <span className="font-serif text-3xl italic text-white/10 group-hover:text-luxury-gold transition-colors">I.</span>
+                   <span className="font-serif text-3xl italic text-white/10 group-hover:text-luxury-gold transition-colors duration-500">I.</span>
                    <span className="block text-[10px] font-bold tracking-[0.3em] text-white/40 uppercase mt-1">Identity</span>
                </div>
 
                {faceImage ? (
-                   <div className="w-full h-full relative">
+                   <div className="w-full h-full relative group">
                         <img src={faceImage} alt="Face" className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity grayscale group-hover:grayscale-0 duration-700" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                        <div className="absolute inset-0 border-2 border-luxury-gold/0 group-hover:border-luxury-gold/30 transition-all duration-500"></div>
                    </div>
                ) : (
                    <div className="flex flex-col items-center justify-center text-center p-8 group-hover:-translate-y-2 transition-transform duration-500">
-                       <div className="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center mb-6 group-hover:border-luxury-gold transition-colors">
+                       <div className="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center mb-6 group-hover:border-luxury-gold transition-colors shadow-[0_0_20px_rgba(0,0,0,0.5)] group-hover:shadow-[0_0_30px_rgba(212,175,55,0.2)]">
                            <svg className="w-8 h-8 text-white/30 group-hover:text-luxury-gold transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                        </div>
-                       <p className="font-serif text-2xl text-white mb-2">The Subject</p>
+                       <p className="font-serif text-2xl text-white mb-2 tracking-wide">The Subject</p>
                        <p className="font-rajdhani text-sm text-slate-500 uppercase tracking-widest">Upload Portrait</p>
                    </div>
                )}
@@ -246,49 +265,52 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
 
         {/* Frame 2: Outfit */}
         <div 
-            className="group relative h-[550px] transition-all duration-700"
+            className="group relative h-[550px] transition-all duration-700 hover:scale-[1.01]"
         >
            {/* Elegant Frame Border */}
            <div className="absolute inset-0 border border-white/10 group-hover:border-luxury-gold/50 transition-colors duration-500"></div>
+           
+           {/* Scanline Effect */}
+           <div className="scanline group-hover:opacity-100 opacity-0 transition-opacity"></div>
            
            <div className="absolute inset-2 bg-midnight/50 backdrop-blur-sm flex flex-col items-center z-10 overflow-hidden">
                
                {/* Header & Controls */}
                <div className="w-full flex justify-between items-start p-6 z-20">
                    <div>
-                        <span className="font-serif text-3xl italic text-white/10 group-hover:text-luxury-gold transition-colors">II.</span>
+                        <span className="font-serif text-3xl italic text-white/10 group-hover:text-luxury-gold transition-colors duration-500">II.</span>
                         <span className="block text-[10px] font-bold tracking-[0.3em] text-white/40 uppercase mt-1">Outfit</span>
                    </div>
                    
                    <div className="flex flex-col items-end gap-2">
                        {/* Source Toggle */}
-                       <div className="flex bg-white/5 border border-white/10 rounded-sm p-1">
+                       <div className="flex bg-white/5 border border-white/10 rounded-sm p-1 backdrop-blur-md">
                            <button 
                              onClick={(e) => { e.stopPropagation(); setApparelMode('upload'); }}
-                             className={`px-3 py-1 text-[9px] font-bold uppercase tracking-widest transition-all ${apparelMode === 'upload' ? 'bg-luxury-gold text-black' : 'text-slate-500 hover:text-white'}`}
+                             className={`px-3 py-1 text-[9px] font-bold uppercase tracking-widest transition-all ${apparelMode === 'upload' ? 'bg-luxury-gold text-black shadow-[0_0_10px_rgba(212,175,55,0.4)]' : 'text-slate-500 hover:text-white'}`}
                            >
                              Upload
                            </button>
                            <button 
                              onClick={(e) => { e.stopPropagation(); setApparelMode('link'); }}
-                             className={`px-3 py-1 text-[9px] font-bold uppercase tracking-widest transition-all ${apparelMode === 'link' ? 'bg-luxury-gold text-black' : 'text-slate-500 hover:text-white'}`}
+                             className={`px-3 py-1 text-[9px] font-bold uppercase tracking-widest transition-all ${apparelMode === 'link' ? 'bg-luxury-gold text-black shadow-[0_0_10px_rgba(212,175,55,0.4)]' : 'text-slate-500 hover:text-white'}`}
                            >
                              Link
                            </button>
                        </div>
 
                        {/* Composition Mode Toggle */}
-                       <div className="flex bg-white/5 border border-white/10 rounded-sm p-1">
+                       <div className="flex bg-white/5 border border-white/10 rounded-sm p-1 backdrop-blur-md">
                            <button 
                              onClick={(e) => { e.stopPropagation(); setOutfitMode('part'); }}
-                             className={`px-3 py-1 text-[9px] font-bold uppercase tracking-widest transition-all ${outfitMode === 'part' ? 'bg-luxury-gold-dim text-white' : 'text-slate-500 hover:text-white'}`}
+                             className={`px-3 py-1 text-[9px] font-bold uppercase tracking-widest transition-all ${outfitMode === 'part' ? 'bg-luxury-gold-dim text-white shadow-[0_0_10px_rgba(170,140,44,0.4)]' : 'text-slate-500 hover:text-white'}`}
                              title="AI will generate matching items for single pieces"
                            >
                              Part
                            </button>
                            <button 
                              onClick={(e) => { e.stopPropagation(); setOutfitMode('full'); }}
-                             className={`px-3 py-1 text-[9px] font-bold uppercase tracking-widest transition-all ${outfitMode === 'full' ? 'bg-luxury-gold-dim text-white' : 'text-slate-500 hover:text-white'}`}
+                             className={`px-3 py-1 text-[9px] font-bold uppercase tracking-widest transition-all ${outfitMode === 'full' ? 'bg-luxury-gold-dim text-white shadow-[0_0_10px_rgba(170,140,44,0.4)]' : 'text-slate-500 hover:text-white'}`}
                              title="AI will preserve the entire look (Top & Bottom)"
                            >
                              Full Fit
@@ -300,15 +322,15 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
                {/* Content */}
                {dressImage ? (
                    <div className="relative w-full h-full flex-1">
-                        <img src={dressImage} alt="Outfit" className="w-full h-full object-contain p-8 opacity-100" />
+                        <img src={dressImage} alt="Outfit" className="w-full h-full object-contain p-8 opacity-100 hover:scale-105 transition-transform duration-700" />
                         <button 
                             onClick={(e) => { e.stopPropagation(); setDressImage(null); }}
-                            className="absolute top-4 right-4 text-white/50 hover:text-red-400 transition-colors text-xs uppercase tracking-widest font-bold"
+                            className="absolute top-4 right-4 text-white/50 hover:text-red-400 transition-colors text-xs uppercase tracking-widest font-bold bg-black/50 px-2 py-1 rounded"
                         >
                             Remove
                         </button>
                         <div className="absolute bottom-4 left-0 w-full text-center">
-                            <span className="text-[10px] text-luxury-gold bg-black/50 px-3 py-1 border border-luxury-gold/30 uppercase tracking-widest">
+                            <span className="text-[10px] text-luxury-gold bg-black/80 px-4 py-2 border border-luxury-gold/30 uppercase tracking-widest rounded-full backdrop-blur-md shadow-lg">
                                 {outfitMode === 'full' ? 'Full Outfit Preservation' : 'Single Item + AI Match'}
                             </span>
                         </div>
@@ -317,13 +339,13 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
                    <div className="flex-1 w-full flex flex-col items-center justify-center p-8">
                        {apparelMode === 'upload' ? (
                            <div 
-                                className="w-full h-full flex flex-col items-center justify-center cursor-pointer group-inner"
+                                className="w-full h-full flex flex-col items-center justify-center cursor-pointer group-inner hover:-translate-y-1 transition-transform duration-300"
                                 onClick={() => dressInputRef.current?.click()}
                            >
-                               <div className="w-24 h-24 border border-dashed border-white/20 flex items-center justify-center mb-6 group-hover:border-luxury-gold transition-all">
+                               <div className="w-24 h-24 border border-dashed border-white/20 flex items-center justify-center mb-6 group-hover:border-luxury-gold transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] group-hover:shadow-[0_0_30px_rgba(212,175,55,0.2)]">
                                     <svg className="w-8 h-8 text-white/30 group-hover:text-luxury-gold transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                </div>
-                               <p className="font-serif text-2xl text-white mb-2">The Look</p>
+                               <p className="font-serif text-2xl text-white mb-2 tracking-wide">The Look</p>
                                <p className="font-rajdhani text-sm text-slate-500 uppercase tracking-widest">
                                    {outfitMode === 'full' ? 'Select Full Outfit Image' : 'Select Top or Bottom'}
                                </p>
@@ -331,7 +353,7 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
                        ) : (
                            <div className="w-full max-w-sm text-center">
                                <p className="font-serif text-2xl text-white mb-6">Import via URL</p>
-                               <div className="relative">
+                               <div className="relative group/input">
                                    <input 
                                       type="text" 
                                       value={productUrl}
@@ -339,12 +361,13 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
                                       placeholder="Paste product link here..." 
                                       className="w-full bg-transparent border-b border-white/30 py-3 text-center text-white placeholder-white/20 focus:outline-none focus:border-luxury-gold font-rajdhani transition-colors"
                                    />
+                                   <div className="absolute bottom-0 left-0 w-0 h-[1px] bg-luxury-gold transition-all duration-500 group-hover/input:w-full"></div>
                                    <button 
                                       onClick={handleUrlScan}
                                       disabled={isUrlScanning || !productUrl}
                                       className="mt-6 btn-luxury px-8 py-2 text-xs uppercase tracking-widest font-bold"
                                    >
-                                       {isUrlScanning ? 'Analyzing...' : 'Extract'}
+                                       {isUrlScanning ? 'Scanning...' : 'Extract'}
                                    </button>
                                </div>
                                <p className="text-[10px] text-slate-600 mt-6 font-rajdhani">
@@ -361,8 +384,8 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
 
       <div className="flex flex-col items-center justify-center mb-20 relative z-20">
         {error && (
-            <div className="border-l-2 border-red-500 bg-red-900/10 text-red-200 font-rajdhani px-8 py-4 mb-8 text-sm tracking-wide">
-                ERROR: {error}
+            <div className="border-l-2 border-red-500 bg-red-900/10 text-red-200 font-rajdhani px-8 py-4 mb-8 text-sm tracking-wide animate-pulse w-full max-w-2xl text-center">
+                {error}
             </div>
         )}
         
@@ -372,13 +395,15 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
             disabled={!faceImage || !dressImage}
             className={`
               btn-primary-gold px-24 py-5 text-sm uppercase tracking-[0.3em] font-orbitron clip-polygon
-              transition-all duration-300
+              transition-all duration-300 relative overflow-hidden group
               ${faceImage && dressImage 
-                ? 'opacity-100 hover:scale-105' 
+                ? 'opacity-100 hover:scale-105 shadow-[0_0_40px_rgba(212,175,55,0.3)]' 
                 : 'opacity-50 cursor-not-allowed grayscale'}
             `}
           >
-             {showKeyBtn ? "Unlock Pro Engine" : "Generate Look"}
+             <span className="relative z-10">{showKeyBtn ? "Unlock Pro Engine" : "Visualize Style"}</span>
+             {/* Inner Shine */}
+             <div className="absolute top-0 -left-[100%] w-full h-full bg-white/20 skew-x-[-30deg] group-hover:left-[200%] transition-all duration-700"></div>
           </button>
         )}
 
@@ -386,18 +411,19 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
       </div>
 
       {generatedImage && (
-        <div className="animate-fade-in-up space-y-16">
+        <div className="animate-reveal-up space-y-16">
             <div className="flex items-center justify-center gap-6 text-luxury-gold mb-10">
                 <div className="h-[1px] w-32 bg-gradient-to-r from-transparent to-luxury-gold"></div>
-                <div className="font-serif italic text-2xl">Result</div>
+                <div className="font-serif italic text-2xl animate-shimmer bg-clip-text text-transparent bg-gold-gradient">Result</div>
                 <div className="h-[1px] w-32 bg-gradient-to-l from-transparent to-luxury-gold"></div>
             </div>
           
           <div className="flex flex-col lg:flex-row gap-16 items-start justify-center">
               {/* Image Result */}
-              <div className="relative w-full max-w-md mx-auto">
-                <div className="absolute -inset-4 border border-luxury-gold/20 transform rotate-2"></div>
-                <div className="relative bg-midnight border border-white/10 p-2 shadow-2xl shadow-black">
+              <div className="relative w-full max-w-md mx-auto group">
+                <div className="absolute -inset-4 border border-luxury-gold/20 transform rotate-2 transition-transform duration-700 group-hover:rotate-0"></div>
+                <div className="absolute -inset-4 border border-white/5 transform -rotate-1 transition-transform duration-700 group-hover:rotate-0"></div>
+                <div className="relative bg-midnight border border-white/10 p-2 shadow-2xl shadow-black transition-transform duration-500 group-hover:scale-[1.01]">
                     <img src={generatedImage} alt="Generated Fit" className="w-full h-auto" />
                     
                     <div className="flex justify-between mt-6 pt-4 border-t border-white/10">
@@ -417,7 +443,7 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
               </div>
 
               {/* Suggestions Panel */}
-              <div className="w-full lg:w-96 glass-panel p-8 border-t border-luxury-gold/50">
+              <div className="w-full lg:w-96 glass-panel p-8 border-t border-luxury-gold/50 animate-reveal-up animate-delay-200">
                   <h4 className="text-xl font-serif text-white mb-8 italic">
                      Curated Matches
                   </h4>
@@ -428,7 +454,7 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
                               <div 
                                 key={idx} 
                                 onClick={() => setSelectedProduct(link)}
-                                className="block group border-b border-white/5 pb-4 last:border-0 cursor-pointer"
+                                className="block group border-b border-white/5 pb-4 last:border-0 cursor-pointer transition-all hover:pl-2"
                               >
                                   <div className="font-bold text-white text-sm mb-1 group-hover:text-luxury-gold transition-colors font-rajdhani uppercase tracking-wide">{link.title}</div>
                                   
@@ -449,7 +475,7 @@ const TryOnInterface: React.FC<TryOnInterfaceProps> = ({ credits, deductCredit, 
                   {linksLoading && (
                      <div className="text-center py-12">
                         <div className="w-6 h-6 border-2 border-luxury-gold border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                        <span className="text-[10px] text-slate-500 uppercase tracking-widest">Searching Boutiques...</span>
+                        <span className="text-[10px] text-slate-500 uppercase tracking-widest animate-pulse">Searching Boutiques...</span>
                      </div>
                   )}
               </div>
